@@ -60,22 +60,6 @@ def safe_division(x, y):
         return x/y
 
 
-
-# path = "F:\\twitter_data\\givenchy\\pickle\\"
-# event = 'givenchy'
-# interval = 30
-# current_time = 360
-# start_hour = 6
-
-    
-# users = load_pickle_file(path+"users.dat")
-# users.reset_index(drop =True , inplace =True)
-# # print(users)
-# print(users.columns)
-# print(users['source_candidates'])
-
-
-# print(unique_users)
 def id_exists(unique_users, uid):
     if uid in unique_users:
         return True
@@ -112,8 +96,6 @@ def network_simulation_init(users, simulation_start_min):
     network_simulation['generation'] = users.apply(lambda x: x['generation'] if x['time_lapsed'] <= current_time else None,axis=1)
     network_simulation['time_since_seed'] = users.apply(lambda x: x['time_since_seed'] if x['time_lapsed'] <= current_time else None,axis=1)
 
-# print("network_simulation")
-# print(network_simulation)
     return network_simulation
 
 
@@ -134,17 +116,17 @@ def network_simulation_merge_followers_list(network_simulation, path_of_follower
     followers_list["followers_list"] = ''
     for i in range (0, len(followers)):
         followers_list["followers_list"][i]= followers.get(followers_list["id"][i])
-    # print(friends_list.get(942362499923566592 ))
     followers_list.reset_index(drop =True , inplace =True)
-    # print(followers_list)
-
-
     return pd.merge(network_simulation,followers_list,on='id',how='left')
-    
-#     print(network_simulation)
 
 
 
+"""
+construct and extract features dataset based on the information in users and  network_simulation data.  
+current_min is number of minutes since the first seed, and all imformation before this time point is known.
+This function will only generate features for users between start_index and end_index. If current_features is not None, 
+the function will update the features for users between start_index and end_index.
+"""
 def construct_features(users, network_simulation, start_index, end_index, current_min, current_features=None):
     
     current_time = current_min   
@@ -152,7 +134,9 @@ def construct_features(users, network_simulation, start_index, end_index, curren
     in_degree = list(users.friends_count)
     out_degree = list(users.followers_count)
     degree = (users.friends_count+users.followers_count).tolist()
+   
     if current_features is None:
+        # initialise empty features
         features = {
             #Columns which are added for simulation, but they are not used as features for model prediction
             'user_id':[],
@@ -255,16 +239,14 @@ def construct_features(users, network_simulation, start_index, end_index, curren
             'Stat_min_kOut': []
 
         }
-
+        # for each user, add new features
         with tqdm(total=len(list(users[start_index: end_index].iterrows()))) as pbar: 
             for index, user_row in users[start_index: end_index].iterrows():
                 source_candidates = sorted(user_row['source_candidates'])
                 features['user_id'].append(user_row['id'])
                 features['infected_status'].append(False)
                 features['infection_time'].append(None)
-                #print(f"user_row['followers_list']:{user_row['followers_list']}")
                 features['followers_list'].append(user_row['followers_json'])
-                #print("b")
                 features['UsM_deltaDays'].append(user_row['user_created_days'])
                 features['UsM_statusesCount'].append(user_row['statuses_count'])
                 features['UsM_followersCount'].append(user_row['followers_count'])
@@ -290,15 +272,9 @@ def construct_features(users, network_simulation, start_index, end_index, curren
                 if isinstance(source_candidates, list):
                     sources = network_simulation.loc[source_candidates]
                     sources_dataframe = sources[sources['time_lapsed'] <= current_time]
-    #                 if user_row['time_lapsed'] > current_time:
-    #                     sources_dataframe = sources[sources['time_lapsed'] <= current_time]
-    #                 else:
-    #                      sources_dataframe = sources[sources['time_lapsed'] <= user_row['time_lapsed']]
                     sources = sources_dataframe.index.tolist()
                 else:
                     sources = []
-                #sources = [x for x in source_candidates if users.loc[x,'time_lapsed'] <= current_time]
-                #print(f'sources:{sources}')
                 if len(sources) > 0:
 
                     # Assign the values here to save computation
@@ -316,32 +292,14 @@ def construct_features(users, network_simulation, start_index, end_index, curren
                     inDegreeList = s_ind.tolist()
                     degreeList = (s_ind + s_outd).tolist()
 
-                    #degreeList = list(users.loc[i, 'followers_count'] + users.loc[i, 'friends_count']  for i in sources)
                     current_time_series = pd.Series([current_time] * len(sources))
                     time_lapsed_series = sources_dataframe.time_lapsed
                     timeList = (current_time_series - time_lapsed_series).tolist()
 
-
                     last_source_index = sources[-1]
                     last_source_row = network_simulation.loc[last_source_index]
                     last_source_seed_row = network_simulation.loc[last_source_row['seed_index']]
-
-                    usr_index = index
-
-    #                 if user_row['time_lapsed'] <= current_time:
-
-    #                     features['infected_status'][-1] = True
-    #                     features['infection_time'][-1] = user_row['time_lapsed']
-
-    #                     network_simulation.loc[usr_index,'time_lapsed'] = user_row['time_lapsed']
-
-    #                     network_simulation.loc[usr_index,'source_index'] = user_row['source_index']
-    #                     network_simulation.loc[usr_index,'seed_index'] = user_row['seed_index']
-    #                     network_simulation.loc[usr_index, 'generation'] = user_row['generation']
-    #                     network_simulation.loc[usr_index, 'time_since_seed'] = user_row['time_since_seed']
-
-
-                    network_simulation.at[usr_index,'source_candidates'] = sources
+                    network_simulation.at[index,'source_candidates'] = sources
 
                     # UsM: User metadata
 
@@ -516,6 +474,7 @@ def construct_features(users, network_simulation, start_index, end_index, curren
                     features['Stat_min_kOut'].append(None)
 
                 pbar.update(1)
+    # Only update some users features
     else:
          with tqdm(total=len(list(users[start_index: end_index].iterrows()))) as pbar: 
             for index, user_row in users[start_index: end_index].iterrows():
@@ -534,18 +493,10 @@ def construct_features(users, network_simulation, start_index, end_index, curren
                 if isinstance(source_candidates, list):
                     sources = network_simulation.loc[source_candidates]
                     sources_dataframe = sources[sources['time_lapsed'] <= current_time]
-    #                 if user_row['time_lapsed'] > current_time:
-    #                     sources_dataframe = sources[sources['time_lapsed'] <= current_time]
-    #                 else:
-    #                      sources_dataframe = sources[sources['time_lapsed'] <= user_row['time_lapsed']]
                     sources = sources_dataframe.index.tolist()
                 else:
                     sources = []
-                #sources = [x for x in source_candidates if users.loc[x,'time_lapsed'] <= current_time]
-                #print(f'sources:{sources}')
                 if len(sources) > 0:
-
-                    # Assign the values here to save computation
                     first_source_index = source_candidates[0]
                     first_source_row = users.loc[first_source_index]
                     first_source_seed_row = users.loc[first_source_row['seed_index']]
@@ -560,32 +511,15 @@ def construct_features(users, network_simulation, start_index, end_index, curren
                     inDegreeList = s_ind.tolist()
                     degreeList = (s_ind + s_outd).tolist()
 
-                    #degreeList = list(users.loc[i, 'followers_count'] + users.loc[i, 'friends_count']  for i in sources)
                     current_time_series = pd.Series([current_time] * len(sources))
                     time_lapsed_series = sources_dataframe.time_lapsed
                     timeList = (current_time_series - time_lapsed_series).tolist()
-
 
                     last_source_index = sources[-1]
                     last_source_row = network_simulation.loc[last_source_index]
                     last_source_seed_row = network_simulation.loc[last_source_row['seed_index']]
 
-                    usr_index = index
-
-    #                 if user_row['time_lapsed'] <= current_time:
-
-    #                     features['infected_status'][-1] = True
-    #                     features['infection_time'][-1] = user_row['time_lapsed']
-
-    #                     network_simulation.loc[usr_index,'time_lapsed'] = user_row['time_lapsed']
-
-    #                     network_simulation.loc[usr_index,'source_index'] = user_row['source_index']
-    #                     network_simulation.loc[usr_index,'seed_index'] = user_row['seed_index']
-    #                     network_simulation.loc[usr_index, 'generation'] = user_row['generation']
-    #                     network_simulation.loc[usr_index, 'time_since_seed'] = user_row['time_since_seed']
-
-
-                    network_simulation.at[usr_index,'source_candidates'] = sources
+                    network_simulation.at[index,'source_candidates'] = sources
 
                     # UsM: User metadata
 
@@ -758,41 +692,33 @@ def construct_features(users, network_simulation, start_index, end_index, curren
                     features.at[index,'Stat_average_normalizedUserFriendsCount']=None
                     features.at[index,'Stat_max_kOut']=None
                     features.at[index,'Stat_min_kOut']=None
-
-                
-                
                 pbar.update(1)
-                
-                
-                
-                
                 
     processed_dataframe = pd.DataFrame(features)
     return processed_dataframe, network_simulation
 
-def data_preparation_process(path_of_user_data, path_of_follower_list=None, path_of_friend_list=None, feature_file_path=None, network_file_path=None, start_hour=0, end_min=360):
+
+"""
+Run this function will complete the data preparation process. feature_file_path and network_file_path is the file location to store generated user features 
+dataset and network simulation dataset. end_min is the number of minutes since the first seed to the simulation start time, which is 360(6 hour) by default. 
+The datasets wil be prepared base on information known by the end of end_min.
+"""
+def data_preparation_process(path_of_user_data, path_of_follower_list=None, path_of_friend_list=None, feature_file_path=None, network_file_path=None, end_min=360):
     
     users = load_pickle_file(path_of_user_data)
     users.reset_index(drop =True , inplace =True)
     unique_users = set(users.index)
-#     print(users['source_candidates'])
     users["source_candidates"] = users["source_candidates"].map(lambda x: filter_id_list(unique_users, x))
-#     print(users['source_candidates'])
     network_simulation = network_simulation_init(users, end_min)
     start_index = 0
     end_index = len(users)
     features, network_simulation = construct_features(users, network_simulation, start_index, end_index, end_min)
     network_simulation=network_simulation_merge_friends_list(network_simulation, path_of_friend_list)
     network_simulation=network_simulation_merge_followers_list(network_simulation, path_of_follower_list)
-#     print(network_simulation)
-#     print(network_simulation['source_candidates'])
-#     print(network_simulation.at[1000,'source_candidates'])
-#     print(network_simulation[network_simulation['time_lapsed'].isnull() == False].index.values)
-#     print(list(features['infected_status']))
-#     print(list(features['infected_status']).count(1))
-#     print(list(network_simulation[]))
     save_pickle_file(feature_file_path,features)
     save_pickle_file(network_file_path,network_simulation)
+
+
 
 def plot_confusion_matrix(cm,
                           target_names,
@@ -873,6 +799,12 @@ def plot_confusion_matrix(cm,
     plt.show()
     
     
+"""
+This function will split user features data into 3 parts:
+X, which consists only features of each user
+y, which consists only infection result(infected or not) of each user
+df, which is X + y
+"""
 def prepare_training_data(initial_features):
     df = initial_features
     
@@ -938,36 +870,28 @@ def downsample(df):
     
     return df_downsampled
 
+"""
+blcsample function will atomaticly select sample stratagy based on Infected and Uninfected population.
+"""
 def blcsample(df):
     # Separate majority and minority classes
     df_minority = df[df.label==0] # Uninfected is the major class  small  2600
     df_majority = df[df.label==1] # Infected is the minor class     big    170
     df_blcmpled = None
-    if len(df_majority) > len(df_majority):
+    if len(df_majority) > len(df_minority):
         df_blcmpled = upsample(df)
     else:
         df_blcmpled = downsample(df)
 
-#         df_majority = df[df.label==0] # Uninfected is the major class  small  2600
-#         df_minority = df[df.label==1] # Infected is the minor class     big   170
-    
-
-#     # Upsample minority class
-#     df_majority_downsampled = resample(df_majority, 
-#                                      replace=False,    # sample without replacement
-#                                      n_samples=len(df_minority),     # to match minority class
-#                                      random_state=123) # reproducible results
-
-#     # Combine minority class with downsampled majority class
-#     df_blcmpled = pd.concat([df_majority_downsampled, df_minority])
-
-#     # Display new class counts
-#     print(df_blcmpled.label.value_counts())
-    
     return df_blcmpled
 
-
-def data_training_process(user_data_path, initial_features_path, model_save_path, rebalance_method = 'up', start_hour=6, model=xgb, param=None):
+"""
+Run this function will complete the data training process. 
+'rebalance_method' is data sample stratage, there are 'up', 'down' and 'blc' options, set to 'blc' as default.
+'model' is the model to be used in the training and prediction. And 'param' is parameters of the model. Use xgb model as default.
+The trained model wil be saved at 'model_save_path'.
+"""
+def data_training_process(user_data_path, initial_features_path, model_save_path, rebalance_method = 'blc', model=xgb, param=None):
     initial_features = load_pickle_file(initial_features_path)
     users = load_pickle_file(user_data_path)
     users.reset_index(drop =True , inplace =True)
@@ -975,7 +899,7 @@ def data_training_process(user_data_path, initial_features_path, model_save_path
     df, X, y = prepare_training_data(initial_features)
     feature_columns = X.columns
     print('There are {} Features'.format(len(feature_columns)))
-    #xgboost
+
     if param == None:
         param = {
             'max_depth':3,
@@ -998,51 +922,37 @@ def data_training_process(user_data_path, initial_features_path, model_save_path
     param['nthread'] = cpu_count
     param['eval_metric'] = ['auc']
     num_boost_round = 100
-    rebalance_method = 'up'
 
-#     xgb_model = train(df, X, y, model, param, 2, num_boost_round, rebalance_method)
-    
-  
-   
     columns = list(df.columns)
     columns.remove('label')
     if rebalance_method == 'up':
         df_rebalance = upsample(df)
     if rebalance_method == 'down':
         df_rebalance = downsample(df)
+    if rebalance_method == 'blc':
+        df_rebalance = blcsample(df)
     X = df_rebalance[columns]
     y = df_rebalance[['label']]
     
     print("---There are "+str(len(X))+" points of data for training.---")
 
     # train XGBoost model
-
-    model = xgb.train(param, xgb.DMatrix(X, label=y), num_boost_round)
-    X = xgb.DMatrix(X)
-    res = model.predict(X)
-#     print(res)
+    trained_model = model.train(param, model.DMatrix(X, label=y), num_boost_round)
+    X = model.DMatrix(X)
+    res = trained_model.predict(X)
+    y = list(y['label'])
     err = 0
     for i in range (0, len(res)):
-        if res[i]>0.5:
-            if i <len(res)/2:
+        if res[i]>0.5 and y[i]!=1:
                 err+=1
-        else:
-            if i>len(res)/2:
+        elif res[i]<=0.5 and y[i]!=0:
                 err+=1
 
     print("training accuracy: "+str(1-err/len(res)))
     
     with open(model_save_path, 'wb') as file:
-        pickle.dump(model, file)
+        pickle.dump(trained_model, file)
 
-
-    # explain the model's predictions using SHAP values
-    # (same syntax works for LightGBM, CatBoost, and scikit-learn models)
-    #explainer = shap.TreeExplainer(model)
-    #shap_values = explainer.shap_values(X)
-
-    # visualize the first prediction's explanation
-    #shap.force_plot(explainer.expected_value, shap_values[0,:], X.iloc[0,:])
 
 
 def update_features(source_id,target_id,features,network_simulation,current_time):
@@ -1071,7 +981,6 @@ def update_features(source_id,target_id,features,network_simulation,current_time
             degreeList = list(network_simulation.loc[i, 'followers_count'] + network_simulation.loc[i, 'friends_count']  for i in sources)
             timeList = [current_time - network_simulation.loc[x,'time_lapsed'] for x in sources]
 
-
             last_source_index = sources[-1]    
             try:
                 last_source_row = network_simulation.loc[last_source_index]
@@ -1079,13 +988,8 @@ def update_features(source_id,target_id,features,network_simulation,current_time
             except:
                 print(f"target_index:{target_id}, last_source_row['seed_index'] : {last_source_row['seed_index']}")
                 print(f"last_source_index:{last_source_index}")
-
-
-            #Extraction
-            #Columns which are added for simulation, but they are not used as features for model prediction
-
+           
             user_row = network_simulation.loc[target_id]
-
 
             # UsM: User metadata                    
 
@@ -1176,11 +1080,13 @@ def update_features(source_id,target_id,features,network_simulation,current_time
             features.loc[target_id,'Stat_average_normalizedUserFriendsCount'] = sources_dataframe.normalized_friends_count.mean()
             features.loc[target_id,'Stat_max_kOut'] = max(degreeList)
             features.loc[target_id,'Stat_min_kOut'] = min(degreeList)
-    #processed_dataframe = pd.DataFrame(features)
     return features
 
-
-def simulation(features,dataset,network_simulation,current_time,model,infected_record):
+"""
+Follow the algorithm stated in report 'A simulation study on information spreading on twitter based on infection prediction model' by
+Jaytee Bhattacharyya in 2019.
+"""
+def simulation(features,network_simulation,current_time,model,infected_record):
     predictedt_infected_list = []
     infected_users_indices = network_simulation[network_simulation['time_lapsed'].isnull() == False].index.values
     print("there are "+ str(len(infected_users_indices)) +" infected users.")
@@ -1191,20 +1097,17 @@ def simulation(features,dataset,network_simulation,current_time,model,infected_r
         count+=1
         if isinstance(network_simulation.loc[i,'followers_list'],list):
    
-            followers_indices = list(set(initial_dataset['id']).intersection(set(initial_dataset.loc[i].followers_list)))
+            followers_indices = list(set(network_simulation['id']).intersection(set(network_simulation.loc[i].followers_list)))
    
-            followers_indices = [list(initial_dataset['id']).index(x) for x in followers_indices]      
-#             followers_indices = [network_simulation[network_simulation['id'] == x].index.values.item() for x in network_simulation.loc[i].followers_list]
-#             print(followers_indices)
+            followers_indices = [list(network_simulation['id']).index(x) for x in followers_indices]
             uninfected_followers_indices = [y for y in followers_indices if np.isnan(network_simulation.loc[y, 'time_lapsed']) == True]
 
             if len(uninfected_followers_indices) > 0:
                 for j in uninfected_followers_indices:
-                    #print(f"j:{j}")
+
                     source_index = i
                     target_index = j
                     processed_dataframe = update_features(source_index,target_index,features,network_simulation,current_time)
-#                     print(f"len processed_dataframe: {len(processed_dataframe)}")
                     try:
                         valid_row = processed_dataframe.loc[[target_index]]
                     except:
@@ -1212,11 +1115,6 @@ def simulation(features,dataset,network_simulation,current_time,model,infected_r
                         print(f"target_index:{target_index}")
                         processed_dataframe.to_csv(path+'processed_dataframe.csv')
                         print(processed_dataframe.loc[[target_index]])
-#                     print(f"(valid_row.columns):{list(valid_row.columns.values)}")
-                    
-#                     for i in range(valid_row.columns):
-#                         print(f"valid_row:{i}")
-                    #valid = valid_row.drop(['user_id','infected_status','infection_time','followers_list','Nw_inDegree','Nw_outDegree'],axis=1)
                     valid = valid_row.drop(['user_id','infected_status','infection_time','followers_list'],axis=1)
 
                     valid = valid.astype('float64')
@@ -1225,7 +1123,6 @@ def simulation(features,dataset,network_simulation,current_time,model,infected_r
                     X = valid[columns]
                     
                     pre_data = xgb.DMatrix(X)
-                    #print(f"pre_data.columns:{pre_data}")
                     infec = model.predict(pre_data)
                     if infec > 0.4:
                         infected_record.append(j)
@@ -1250,8 +1147,10 @@ def simulation(features,dataset,network_simulation,current_time,model,infected_r
     
     return network_simulation, predictedt_infected_list
 
+"""
+This function is used to retrain the current model using new data at each timestep without retrain the model with all historical data.
 
-
+"""
 def incremental_trained_model(start_index, users, initial_features, current_model, params=None, num_boost_round=100):
     if params is None:
         params = {
@@ -1267,12 +1166,9 @@ def incremental_trained_model(start_index, users, initial_features, current_mode
     params['eval_metric'] = ['auc']
     num_boost_round = 100
     rebalance_method = 'blc'
-    
     initial_features = initial_features.loc[start_index:]
     df, X, y = prepare_training_data(initial_features)
-
     feature_columns = X.columns
-    
     columns = list(df.columns)
     columns.remove('label')
     if rebalance_method == 'up':
@@ -1286,14 +1182,15 @@ def incremental_trained_model(start_index, users, initial_features, current_mode
     y = df_rebalance[['label']]
     
     new_model = xgb.train(params, xgb.DMatrix(X, label=y), num_boost_round, xgb_model=current_model)
-#     X = xgb.DMatrix(X)
-#     res = model.predict(X)
-    
     return new_model
     
-    
-    
-
+"""
+Run this function will complete the simulation process.
+'current_time' is the number of minutes since the first seed to simulation start time.
+'total_time_duration' is number of minutes since the first seed to the end of simulation.
+'interval' is the simulation timestep in minutes.
+'simulation_result_path' is the path to save the final simulation network.
+"""
 def simulation_process(current_time, total_time_duration, interval, features_path, network_path, user_path, model_path, model_params, simulation_result_path):
     initial_features = load_pickle_file(features_path)
     initial_dataset = load_pickle_file(network_path)
@@ -1303,43 +1200,32 @@ def simulation_process(current_time, total_time_duration, interval, features_pat
     model_infile = open(model_path,'rb')
     model = pickle.load(model_infile)
     model_infile.close()
-#     total_time_duration = 540
-#     interval = 30
-    #current_time = 360
-#     current_time = 360
-    #current_time = 480
-    #current_time = 540
-    #current_time = 720
 
-#     time 360 - 390 :  3463-3609
-#       time 390 - 420 :   3610 - 3710
     features = initial_features
     network_simulation = initial_dataset
     id_set = set(network_simulation['id'].tolist())
 
     print("Simulation started")
     start_time = time.time()
-# test
+
+    ini_start_index = len(initial_dataset[initial_dataset['time_lapsed'].isnull() == False].index.values)
     infected_record=[]
     while current_time < total_time_duration:
         start_index = len(initial_dataset[initial_dataset['time_lapsed'].isnull() == False].index.values)
         print(f"current_time:{current_time}")
         print("=================================================")
-        #network_simulation = simulation(features,initial_dataset,network_simulation,current_time)
-        this_timestep_network_simulation, predicted_infected_list = simulation(features,initial_dataset,network_simulation,current_time, model, infected_record)
-        #print(f"current_time:{current_time}")
+        this_timestep_network_simulation, predicted_infected_list = simulation(features,network_simulation,current_time, model, infected_record)
         next_time_step = current_time+interval
         
-#   ============================
         initial_dataset = network_simulation_init(users, next_time_step)
         end_index = len(initial_dataset[initial_dataset['time_lapsed'].isnull() == False].index.values)-1
         true_predicted = 0
         for each in predicted_infected_list:
             if each > start_index and each< end_index:
                 true_predicted+=1
-        precision = true_predicted/len(predicted_infected_list)
-        recall = true_predicted/ (end_index - start_index)
-        F1 = 2.0*precision*recall/(precision+recall)
+        precision =safe_division(true_predicted, len(predicted_infected_list)) 
+        recall =safe_division(true_predicted,end_index - start_index)
+        F1 =safe_division(2.0*precision*recall,precision+recall)
         print('++++++++At simulation period '+str(current_time)+' to '+str(next_time_step)+'++++++++')
         print(str(end_index - start_index)+' users infected in reality')
         print('total positive prediction:  '+str(len(predicted_infected_list)))
@@ -1353,67 +1239,20 @@ def simulation_process(current_time, total_time_duration, interval, features_pat
         initial_features, initial_dataset = construct_features(users, initial_dataset, start_index, len(users), next_time_step, current_features=initial_features)
         
         model = incremental_trained_model(start_index, users, initial_features, model)
-#   ============================
-
         current_time = next_time_step
     network_simulation.to_csv(simulation_result_path,index=False)
     print(f"Simulation finished after {round((time.time() - start_time)/60,2)} minutes")
 
-    
-    
-#     true_predicted = 0
-#     for each in infected_record:
-#         if each > 3462 and each< 5011:
-#             true_predicted+=1
-#     print('total positive prediction: '+str(len(infected_record)))
-#     print('total true posisive: '+str(true_predicted))
-#     print('total false posisive: '+str(len(infected_record)-true_predicted))
-#     print('precision: '+str( true_predicted/len(infected_record) ))
-    
-
-# Try saving your model after you train on the first batch. Then, on successive runs, provide the xgb.train method with the 
-# filepath of the saved model.
-
-# Here's a small experiment that I ran to convince myself that it works:
-
-# First, split the boston dataset into training and testing sets. Then split the training set into halves. Fit a model with 
-# the first half and get a score that will serve as a benchmark. Then fit two models with the second half; one model will 
-# have the additional parameter xgb_model. If passing in the extra parameter didn't make a difference, then we would expect 
-# their scores to be similar.. But, fortunately, the new model seems to perform much better than the first.
-
-# import xgboost as xgb
-# from sklearn.cross_validation import train_test_split as ttsplit
-# from sklearn.datasets import load_boston
-# from sklearn.metrics import mean_squared_error as mse
-
-# X = load_boston()['data']
-# y = load_boston()['target']
-
-# # split data into training and testing sets
-# # then split training set in half
-# X_train, X_test, y_train, y_test = ttsplit(X, y, test_size=0.1, random_state=0)
-# X_train_1, X_train_2, y_train_1, y_train_2 = ttsplit(X_train, 
-#                                                      y_train, 
-#                                                      test_size=0.5,
-#                                                      random_state=0)
-
-# xg_train_1 = xgb.DMatrix(X_train_1, label=y_train_1)
-# xg_train_2 = xgb.DMatrix(X_train_2, label=y_train_2)
-# xg_test = xgb.DMatrix(X_test, label=y_test)
-
-# params = {'objective': 'reg:linear', 'verbose': False}
-# model_1 = xgb.train(params, xg_train_1, 30)
-# model_1.save_model('model_1.model')
-
-# # ================= train two versions of the model =====================#
-# model_2_v1 = xgb.train(params, xg_train_2, 30)
-# model_2_v2 = xgb.train(params, xg_train_2, 30, xgb_model='model_1.model')
-
-# print(mse(model_1.predict(xg_test), y_test))     # benchmark
-# print(mse(model_2_v1.predict(xg_test), y_test))  # "before"
-# print(mse(model_2_v2.predict(xg_test), y_test))  # "after"
-
-# 23.0475232194
-# 39.6776876084
-# 27.2053239482
-
+    true_predicted = 0
+    for each in infected_record:
+        if each > ini_start_index and each< end_index:
+            true_predicted+=1
+    precision = safe_division(true_predicted,len(infected_record)) 
+    recall = safe_division(true_predicted,end_index - ini_start_index)
+    F1 = safe_division(2.0*precision*recall,precision+recall)
+    print('total positive prediction: '+str(len(infected_record)))
+    print('total true posisive: '+str(true_predicted))
+    print('total false posisive: '+str(len(infected_record)-true_predicted))
+    print('precision: '+str( precision ))
+    print('recall: '+str(recall))
+    print('F1: '+str(F1))
