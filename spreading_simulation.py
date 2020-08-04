@@ -763,7 +763,6 @@ def plot_confusion_matrix(cm,
 
     accuracy = np.trace(cm) / float(np.sum(cm))
     misclass = 1 - accuracy
-
     if cmap is None:
         cmap = plt.get_cmap('Blues')
 
@@ -776,10 +775,8 @@ def plot_confusion_matrix(cm,
         tick_marks = np.arange(len(target_names))
         plt.xticks(tick_marks, target_names, rotation=45)
         plt.yticks(tick_marks, target_names)
-
     if normalize:
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-
 
     thresh = cm.max() / 1.5 if normalize else cm.max() / 2
     for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
@@ -791,8 +788,6 @@ def plot_confusion_matrix(cm,
             plt.text(j, i, "{:,}".format(cm[i, j]),
                      horizontalalignment="center",
                      color="red" if cm[i, j] > thresh else "black")
-
-
     plt.tight_layout()
     plt.ylabel('True label')
     plt.xlabel('Predicted label\naccuracy={:0.4f}; misclass={:0.4f}'.format(accuracy, misclass))
@@ -807,12 +802,9 @@ df, which is X + y
 """
 def prepare_training_data(initial_features):
     df = initial_features
-    
     df['label']=df['infected_status'].apply(lambda x: 1 if x == True else 0)
     df = df.reset_index(drop=True)
-    
     df = df.drop(columns = ['user_id', 'infected_status', 'infection_time', 'followers_list'],axis = 1)
-    
     # Converting all type to float, to prepare for feature selection
     df = df.astype('float')
     # Reset index, with drop equals to true to avoid setting old index as a new column
@@ -822,11 +814,8 @@ def prepare_training_data(initial_features):
         df['label'].value_counts()[0],
         df['label'].value_counts()[1]
     ))
-#     df.groupby(['TwM_tCurrent','label']).size().unstack(fill_value=0).plot.bar(title='Original Data Distribution')
-    
     columns = list(df.columns)
     columns.remove('label')
-    
     X = df[columns]
     y = df[['label']]
     return df, X, y
@@ -841,15 +830,11 @@ def upsample(df):
                                      replace=True,     # sample with replacement
                                      n_samples=len(df_majority),    # to match majority class
                                      random_state=123) # reproducible results
-
     # Combine majority class with upsampled minority class
     df_upsampled = pd.concat([df_majority, df_minority_upsampled])
-
     # Display new class counts
     print(df_upsampled.label.value_counts())
-    
     return df_upsampled
-
 
 def downsample(df):
     # Separate majority and minority classes
@@ -861,10 +846,8 @@ def downsample(df):
                                      replace=False,    # sample without replacement
                                      n_samples=len(df_minority),     # to match minority class
                                      random_state=123) # reproducible results
-
     # Combine minority class with downsampled majority class
     df_downsampled = pd.concat([df_majority_downsampled, df_minority])
-
     # Display new class counts
     print(df_downsampled.label.value_counts())
     
@@ -882,7 +865,6 @@ def blcsample(df):
         df_blcmpled = upsample(df)
     else:
         df_blcmpled = downsample(df)
-
     return df_blcmpled
 
 """
@@ -895,7 +877,6 @@ def data_training_process(user_data_path, initial_features_path, model_save_path
     initial_features = load_pickle_file(initial_features_path)
     users = load_pickle_file(user_data_path)
     users.reset_index(drop =True , inplace =True)
-
     df, X, y = prepare_training_data(initial_features)
     feature_columns = X.columns
     print('There are {} Features'.format(len(feature_columns)))
@@ -922,7 +903,6 @@ def data_training_process(user_data_path, initial_features_path, model_save_path
     param['nthread'] = cpu_count
     param['eval_metric'] = ['auc']
     num_boost_round = 100
-
     columns = list(df.columns)
     columns.remove('label')
     if rebalance_method == 'up':
@@ -933,7 +913,6 @@ def data_training_process(user_data_path, initial_features_path, model_save_path
         df_rebalance = blcsample(df)
     X = df_rebalance[columns]
     y = df_rebalance[['label']]
-    
     print("---There are "+str(len(X))+" points of data for training.---")
 
     # train XGBoost model
@@ -947,13 +926,10 @@ def data_training_process(user_data_path, initial_features_path, model_save_path
                 err+=1
         elif res[i]<=0.5 and y[i]!=0:
                 err+=1
-
     print("training accuracy: "+str(1-err/len(res)))
     
     with open(model_save_path, 'wb') as file:
         pickle.dump(trained_model, file)
-
-
 
 def update_features(source_id,target_id,features,network_simulation,current_time):
     
@@ -965,22 +941,18 @@ def update_features(source_id,target_id,features,network_simulation,current_time
         
         source_candidates = sorted(network_simulation.loc[target_id,'source_candidates'])
         nf = network_simulation.loc[source_candidates]
-        
         sources = nf[nf['time_lapsed'] <= current_time].index.tolist()
         
         if len(sources) > 0:
-        
             first_source_index = source_candidates[0]
             first_source_row = network_simulation.loc[first_source_index]
             first_source_seed_row = network_simulation.loc[first_source_row['seed_index']]
-
             sources_dataframe = network_simulation.loc[sources]
             degreeList = list(degree[i] for i in sources)
             inDegreeList = list(in_degree[i] for i in sources)
             outDegreeList = list(out_degree[i] for i in sources)
             degreeList = list(network_simulation.loc[i, 'followers_count'] + network_simulation.loc[i, 'friends_count']  for i in sources)
             timeList = [current_time - network_simulation.loc[x,'time_lapsed'] for x in sources]
-
             last_source_index = sources[-1]    
             try:
                 last_source_row = network_simulation.loc[last_source_index]
@@ -988,11 +960,9 @@ def update_features(source_id,target_id,features,network_simulation,current_time
             except:
                 print(f"target_index:{target_id}, last_source_row['seed_index'] : {last_source_row['seed_index']}")
                 print(f"last_source_index:{last_source_index}")
-           
             user_row = network_simulation.loc[target_id]
 
             # UsM: User metadata                    
-
             features.loc[target_id,'UsM_deltaDays0'] = first_source_row.user_created_days
             features.loc[target_id,'UsM_statusesCount0'] = first_source_row.statuses_count
             features.loc[target_id,'UsM_followersCount0'] = first_source_row.followers_count
@@ -1096,9 +1066,7 @@ def simulation(features,network_simulation,current_time,model,infected_record):
             print("=====progress: "+str(count)+"/"+str(len(infected_users_indices))+" users=====")
         count+=1
         if isinstance(network_simulation.loc[i,'followers_list'],list):
-   
             followers_indices = list(set(network_simulation['id']).intersection(set(network_simulation.loc[i].followers_list)))
-   
             followers_indices = [list(network_simulation['id']).index(x) for x in followers_indices]
             uninfected_followers_indices = [y for y in followers_indices if np.isnan(network_simulation.loc[y, 'time_lapsed']) == True]
 
@@ -1149,7 +1117,6 @@ def simulation(features,network_simulation,current_time,model,infected_record):
 
 """
 This function is used to retrain the current model using new data at each timestep without retrain the model with all historical data.
-
 """
 def incremental_trained_model(start_index, users, initial_features, current_model, params=None, num_boost_round=100):
     if params is None:
@@ -1189,27 +1156,45 @@ Run this function will complete the simulation process.
 'current_time' is the number of minutes since the first seed to simulation start time.
 'total_time_duration' is number of minutes since the first seed to the end of simulation.
 'interval' is the simulation timestep in minutes.
-'simulation_result_path' is the path to save the final simulation network.
+'simulation_result_path' is the path to save the final simulation accuracy results.
+In the accuracy result file, columns:
+    'true_infection','positive_prediction','true_positive','precision','recall' and 'f1_score' 
+    are simulation accuracy related information about the time interval.
+
+    'true_infection0','positive_prediction0','true_positive0','precision0','recall0'and 'f1_score0'
+    are simulation accuracy related information about the first seed to the current simulation time. 
 """
 def simulation_process(current_time, total_time_duration, interval, features_path, network_path, user_path, model_path, model_params, simulation_result_path):
     initial_features = load_pickle_file(features_path)
     initial_dataset = load_pickle_file(network_path)
     users = load_pickle_file(user_path)
     users.reset_index(drop =True , inplace =True)
-
     model_infile = open(model_path,'rb')
     model = pickle.load(model_infile)
     model_infile.close()
-
     features = initial_features
     network_simulation = initial_dataset
     id_set = set(network_simulation['id'].tolist())
-
     print("Simulation started")
     start_time = time.time()
 
     ini_start_index = len(initial_dataset[initial_dataset['time_lapsed'].isnull() == False].index.values)
     infected_record=[]
+    accuracy = {
+    'time':[],
+    'true_infection':[],
+    'positive_prediction':[],
+    'true_positive':[],
+    'precision':[],
+    'recall':[],
+    'f1_score':[],
+    'true_infection0':[],
+    'positive_prediction0':[],
+    'true_positive0':[],
+    'precision0':[],
+    'recall0':[],
+    'f1_score0':[]
+}
     while current_time < total_time_duration:
         start_index = len(initial_dataset[initial_dataset['time_lapsed'].isnull() == False].index.values)
         print(f"current_time:{current_time}")
@@ -1220,39 +1205,96 @@ def simulation_process(current_time, total_time_duration, interval, features_pat
         initial_dataset = network_simulation_init(users, next_time_step)
         end_index = len(initial_dataset[initial_dataset['time_lapsed'].isnull() == False].index.values)-1
         true_predicted = 0
+        accuracy['time'].append(current_time)
         for each in predicted_infected_list:
             if each > start_index and each< end_index:
                 true_predicted+=1
+
+        #accuracy for one time step
         precision =safe_division(true_predicted, len(predicted_infected_list)) 
         recall =safe_division(true_predicted,end_index - start_index)
         F1 =safe_division(2.0*precision*recall,precision+recall)
+        accuracy['true_infection'].append(end_index - start_index)
+        accuracy['positive_prediction'].append(len(predicted_infected_list))
+        accuracy['true_positive'].append(true_predicted)
+        accuracy['precision'].append(precision)
+        accuracy['recall'].append(recall)
+        accuracy['f1_score'].append(F1)
         print('++++++++At simulation period '+str(current_time)+' to '+str(next_time_step)+'++++++++')
+        print('Accuracy in this period')
         print(str(end_index - start_index)+' users infected in reality')
         print('total positive prediction:  '+str(len(predicted_infected_list)))
         print('total true posisive: '+str(true_predicted))
         print('total false posisive: '+str(len(predicted_infected_list)-true_predicted))
         print('precision: '+str( precision ))
         print('recall: '+str(recall))
-        print('F1: '+str(F1))
+        print('F1_score: '+str(F1))
         print('+++++++++++++++++++++++++++++++++++++++++++++')
-        
+
+        #accuracy including known infected uers till the current time
+        precision0 = safe_division(true_predicted+start_index+1,len(predicted_infected_list)+start_index+1) 
+        recall0 = safe_division(true_predicted + start_index+1,end_index)
+        F10 = safe_division(2.0*precision0*recall0,precision0+recall0)
+
+        accuracy['true_infection0'].append(end_index+1)
+        accuracy['positive_prediction0'].append(len(predicted_infected_list)+start_index+1)
+        accuracy['true_positive0'].append(true_predicted+start_index+1)
+        accuracy['precision0'].append(precision0)
+        accuracy['recall0'].append(recall0)
+        accuracy['f1_score0'].append(F10)
+        print('Accuracy including previous known infected users')
+        print('total positive prediction: '+str(len(predicted_infected_list)+start_index+1))
+        print('total true posisive: '+str(true_predicted+start_index+1))
+        print('precision0: '+str( precision0 ))
+        print('recall0: '+str(recall0))
+        print('F1_score0: '+str(F10))
+        print('+++++++++++++++++++++++++++++++++++++++++++++')
+
         initial_features, initial_dataset = construct_features(users, initial_dataset, start_index, len(users), next_time_step, current_features=initial_features)
         
         model = incremental_trained_model(start_index, users, initial_features, model)
         current_time = next_time_step
-    network_simulation.to_csv(simulation_result_path,index=False)
+    # network_simulation.to_csv(simulation_result_path,index=False)
     print(f"Simulation finished after {round((time.time() - start_time)/60,2)} minutes")
 
-    true_predicted = 0
-    for each in infected_record:
-        if each > ini_start_index and each< end_index:
-            true_predicted+=1
-    precision = safe_division(true_predicted,len(infected_record)) 
-    recall = safe_division(true_predicted,end_index - ini_start_index)
-    F1 = safe_division(2.0*precision*recall,precision+recall)
-    print('total positive prediction: '+str(len(infected_record)))
-    print('total true posisive: '+str(true_predicted))
-    print('total false posisive: '+str(len(infected_record)-true_predicted))
-    print('precision: '+str( precision ))
-    print('recall: '+str(recall))
-    print('F1: '+str(F1))
+    accuracy_df = pd.DataFrame(accuracy)
+    accuracy_df.to_csv(simulation_result_path)
+
+
+def plot_accuracy(simulation_result_path, save_img_path=None, include_known_infection=True):
+    af = pd.read_csv(simulation_result_path)
+    x_bar = af['time']
+
+    with plt.style.context(('ggplot')):
+        plt.figure(figsize=(15,9))
+
+        x = np.array(af['time'])
+        if include_known_infection:
+            precision = np.array([round(x,2) for x in list(af['precision0'].values)])
+            recall = np.array([round(x,2) for x in list(af['recall0'].values)])
+            f1_score = np.array([round(x,2) for x in list(af['f1_score0'].values)])
+        else:
+            precision = np.array([round(x,2) for x in list(af['precision'].values)])
+            recall = np.array([round(x,2) for x in list(af['recall'].values)])
+            f1_score = np.array([round(x,2) for x in list(af['f1_score'].values)])
+
+        plt.plot(x,precision,color='green',label='Precision Score')
+        plt.plot(x,recall,color='blue',label='Recall Score')
+        plt.plot(x,f1_score,color='red',label='F1 Score')
+
+        plt.xticks(x_bar,fontsize=15,rotation=90)
+        plt.yticks(fontsize=15)
+        plt.xlabel('Time-lapsed',fontsize=15)
+        plt.ylabel('Accuracy Score',fontsize=15)
+        plt.legend(loc='lower right',fontsize=15)
+        plt.title("")
+
+        for a, b in zip(x, precision):
+            plt.text(a, b, b, ha='right', va='bottom', fontsize=15,color='green')
+        for a, b in zip(x, recall):
+            plt.text(a, b, b, ha='right', va='bottom', fontsize=15,color='blue')
+        for a, b in zip(x, f1_score):
+            plt.text(a, b, b, ha='right', va='bottom', fontsize=15,color='red')
+        if save_img_path is not None:
+            plt.savefig(save_img_path)
+        plt.show()
