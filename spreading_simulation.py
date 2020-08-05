@@ -1092,7 +1092,7 @@ def simulation(features,network_simulation,current_time,model,infected_record):
                     
                     pre_data = xgb.DMatrix(X)
                     infec = model.predict(pre_data)
-                    if infec > 0.4:
+                    if infec > 0.6:
                         infected_record.append(j)
                         predictedt_infected_list.append(j)
                         print("user "+str(j)+" Infected")
@@ -1164,7 +1164,7 @@ In the accuracy result file, columns:
     'true_infection0','positive_prediction0','true_positive0','precision0','recall0'and 'f1_score0'
     are simulation accuracy related information about the first seed to the current simulation time. 
 """
-def simulation_process(current_time, total_time_duration, interval, features_path, network_path, user_path, model_path, model_params, simulation_result_path):
+def simulation_process(current_time, total_time_duration, interval, features_path, network_path, user_path,friend_list_path, follower_list_path ,model_path, model_params, simulation_result_path):
     initial_features = load_pickle_file(features_path)
     initial_dataset = load_pickle_file(network_path)
     users = load_pickle_file(user_path)
@@ -1172,9 +1172,7 @@ def simulation_process(current_time, total_time_duration, interval, features_pat
     model_infile = open(model_path,'rb')
     model = pickle.load(model_infile)
     model_infile.close()
-    features = initial_features
-    network_simulation = initial_dataset
-    id_set = set(network_simulation['id'].tolist())
+    id_set = set(initial_dataset['id'].tolist())
     print("Simulation started")
     start_time = time.time()
 
@@ -1187,19 +1185,19 @@ def simulation_process(current_time, total_time_duration, interval, features_pat
     'true_positive':[],
     'precision':[],
     'recall':[],
-    'f1_score':[],
-    'true_infection0':[],
-    'positive_prediction0':[],
-    'true_positive0':[],
-    'precision0':[],
-    'recall0':[],
-    'f1_score0':[]
+    'f1_score':[]
+    # 'true_infection0':[],
+    # 'positive_prediction0':[],
+    # 'true_positive0':[],
+    # 'precision0':[],
+    # 'recall0':[],
+    # 'f1_score0':[]
 }
     while current_time < total_time_duration:
         start_index = len(initial_dataset[initial_dataset['time_lapsed'].isnull() == False].index.values)
         print(f"current_time:{current_time}")
         print("=================================================")
-        this_timestep_network_simulation, predicted_infected_list = simulation(features,network_simulation,current_time, model, infected_record)
+        this_timestep_network_simulation, predicted_infected_list = simulation(initial_features,initial_dataset,current_time, model, infected_record)
         next_time_step = current_time+interval
         
         initial_dataset = network_simulation_init(users, next_time_step)
@@ -1230,31 +1228,13 @@ def simulation_process(current_time, total_time_duration, interval, features_pat
         print('recall: '+str(recall))
         print('F1_score: '+str(F1))
         print('+++++++++++++++++++++++++++++++++++++++++++++')
-
-        #accuracy including known infected uers till the current time
-        precision0 = safe_division(true_predicted+start_index+1,len(predicted_infected_list)+start_index+1) 
-        recall0 = safe_division(true_predicted + start_index+1,end_index)
-        F10 = safe_division(2.0*precision0*recall0,precision0+recall0)
-
-        accuracy['true_infection0'].append(end_index+1)
-        accuracy['positive_prediction0'].append(len(predicted_infected_list)+start_index+1)
-        accuracy['true_positive0'].append(true_predicted+start_index+1)
-        accuracy['precision0'].append(precision0)
-        accuracy['recall0'].append(recall0)
-        accuracy['f1_score0'].append(F10)
-        print('Accuracy including previous known infected users')
-        print('total positive prediction: '+str(len(predicted_infected_list)+start_index+1))
-        print('total true posisive: '+str(true_predicted+start_index+1))
-        print('precision0: '+str( precision0 ))
-        print('recall0: '+str(recall0))
-        print('F1_score0: '+str(F10))
-        print('+++++++++++++++++++++++++++++++++++++++++++++')
-
-        initial_features, initial_dataset = construct_features(users, initial_dataset, start_index, len(users), next_time_step, current_features=initial_features)
-        
+        if next_time_step > total_time_duration:
+            break
+        initial_features, initial_dataset = construct_features(users, initial_dataset, start_index, len(users), next_time_step, current_features = initial_features)
+        initial_dataset=network_simulation_merge_friends_list(initial_dataset, friend_list_path)
+        initial_dataset=network_simulation_merge_followers_list(initial_dataset, follower_list_path)
         model = incremental_trained_model(start_index, users, initial_features, model)
         current_time = next_time_step
-    # network_simulation.to_csv(simulation_result_path,index=False)
     print(f"Simulation finished after {round((time.time() - start_time)/60,2)} minutes")
 
     accuracy_df = pd.DataFrame(accuracy)
@@ -1269,6 +1249,7 @@ def plot_accuracy(simulation_result_path, save_img_path=None, include_known_infe
         plt.figure(figsize=(15,9))
 
         x = np.array(af['time'])
+        """
         if include_known_infection:
             precision = np.array([round(x,2) for x in list(af['precision0'].values)])
             recall = np.array([round(x,2) for x in list(af['recall0'].values)])
@@ -1277,6 +1258,10 @@ def plot_accuracy(simulation_result_path, save_img_path=None, include_known_infe
             precision = np.array([round(x,2) for x in list(af['precision'].values)])
             recall = np.array([round(x,2) for x in list(af['recall'].values)])
             f1_score = np.array([round(x,2) for x in list(af['f1_score'].values)])
+        """
+        precision = np.array([round(x,2) for x in list(af['precision'].values)])
+        recall = np.array([round(x,2) for x in list(af['recall'].values)])
+        f1_score = np.array([round(x,2) for x in list(af['f1_score'].values)])
 
         plt.plot(x,precision,color='green',label='Precision Score')
         plt.plot(x,recall,color='blue',label='Recall Score')
