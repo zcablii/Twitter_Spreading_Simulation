@@ -1164,7 +1164,7 @@ In the accuracy result file, columns:
     'true_infection0','positive_prediction0','true_positive0','precision0','recall0'and 'f1_score0'
     are simulation accuracy related information about the first seed to the current simulation time. 
 """
-def simulation_process(current_time, total_time_duration, interval, features_path, network_path, user_path,friend_list_path, follower_list_path ,model_path, model_params, simulation_result_path):
+def simulation_process(current_time, total_time_duration, interval, features_path, network_path, user_path,friend_list_path, follower_list_path ,model_path, model_params, simulation_result_path, retarin_at_each_timestep=True):
     initial_features = load_pickle_file(features_path)
     initial_dataset = load_pickle_file(network_path)
     users = load_pickle_file(user_path)
@@ -1193,48 +1193,72 @@ def simulation_process(current_time, total_time_duration, interval, features_pat
     # 'recall0':[],
     # 'f1_score0':[]
 }
-    while current_time < total_time_duration:
-        start_index = len(initial_dataset[initial_dataset['time_lapsed'].isnull() == False].index.values)
-        print(f"current_time:{current_time}")
-        print("=================================================")
-        this_timestep_network_simulation, predicted_infected_list = simulation(initial_features,initial_dataset,current_time, model, infected_record)
-        next_time_step = current_time+interval
-        
-        initial_dataset = network_simulation_init(users, next_time_step)
-        end_index = len(initial_dataset[initial_dataset['time_lapsed'].isnull() == False].index.values)-1
-        true_predicted = 0
-        accuracy['time'].append(current_time)
-        for each in predicted_infected_list:
-            if each > start_index and each< end_index:
-                true_predicted+=1
+    
+    if retarin_at_each_timestep is True:
+        while current_time < total_time_duration:
+            start_index = len(initial_dataset[initial_dataset['time_lapsed'].isnull() == False].index.values)
+            print(f"current_time:{current_time}")
+            print("=================================================")
+            this_timestep_network_simulation, predicted_infected_list = simulation(initial_features,initial_dataset,current_time, model, infected_record)
+            next_time_step = current_time+interval
 
-        #accuracy for one time step
-        precision =safe_division(true_predicted, len(predicted_infected_list)) 
-        recall =safe_division(true_predicted,end_index - start_index)
-        F1 =safe_division(2.0*precision*recall,precision+recall)
-        accuracy['true_infection'].append(end_index - start_index)
-        accuracy['positive_prediction'].append(len(predicted_infected_list))
-        accuracy['true_positive'].append(true_predicted)
-        accuracy['precision'].append(precision)
-        accuracy['recall'].append(recall)
-        accuracy['f1_score'].append(F1)
-        print('++++++++At simulation period '+str(current_time)+' to '+str(next_time_step)+'++++++++')
-        print('Accuracy in this period')
-        print(str(end_index - start_index)+' users infected in reality')
-        print('total positive prediction:  '+str(len(predicted_infected_list)))
+            initial_dataset = network_simulation_init(users, next_time_step)
+            end_index = len(initial_dataset[initial_dataset['time_lapsed'].isnull() == False].index.values)-1
+            true_predicted = 0
+            accuracy['time'].append(current_time)
+            for each in predicted_infected_list:
+                if each > start_index and each< end_index:
+                    true_predicted+=1
+
+            #accuracy for one time step
+            precision =safe_division(true_predicted, len(predicted_infected_list)) 
+            recall =safe_division(true_predicted,end_index - start_index)
+            F1 =safe_division(2.0*precision*recall,precision+recall)
+            accuracy['true_infection'].append(end_index - start_index)
+            accuracy['positive_prediction'].append(len(predicted_infected_list))
+            accuracy['true_positive'].append(true_predicted)
+            accuracy['precision'].append(precision)
+            accuracy['recall'].append(recall)
+            accuracy['f1_score'].append(F1)
+            print('++++++++At simulation period '+str(current_time)+' to '+str(next_time_step)+'++++++++')
+            print('Accuracy in this period')
+            print(str(end_index - start_index)+' users infected in reality')
+            print('total positive prediction:  '+str(len(predicted_infected_list)))
+            print('total true posisive: '+str(true_predicted))
+            print('total false posisive: '+str(len(predicted_infected_list)-true_predicted))
+            print('precision: '+str( precision ))
+            print('recall: '+str(recall))
+            print('F1_score: '+str(F1))
+            print('+++++++++++++++++++++++++++++++++++++++++++++')
+            if next_time_step > total_time_duration:
+                break
+            initial_features, initial_dataset = construct_features(users, initial_dataset, start_index, len(users), next_time_step, current_features = initial_features)
+            initial_dataset=network_simulation_merge_friends_list(initial_dataset, friend_list_path)
+            initial_dataset=network_simulation_merge_followers_list(initial_dataset, follower_list_path)
+            model = incremental_trained_model(start_index, users, initial_features, model)
+            current_time = next_time_step
+    else:
+        while current_time < total_time_duration:
+            start_index = len(initial_dataset[initial_dataset['time_lapsed'].isnull() == False].index.values)-1
+            end_index = len(users[users['time_lapsed'].isnull() == False].index.values)-1
+            print(f"current_time:{current_time}")
+            network_simulation, predicted_infected_list = simulation(initial_features,initial_dataset,current_time,model,infected_record)
+            current_time += interval
+        true_predicted = 0
+        for each in infected_record:
+            if each > ini_start_index and each< end_index:
+                true_predicted+=1
+        precision = safe_division(true_predicted,len(infected_record)) 
+        recall = safe_division(true_predicted, end_index - ini_start_index) 
+        F1 = safe_division(2.0*precision*recall, precision+recall)
+        print(str(end_index - ini_start_index)+' users infected in reality')
+        print('total positive prediction: '+str(len(infected_record)))
         print('total true posisive: '+str(true_predicted))
-        print('total false posisive: '+str(len(predicted_infected_list)-true_predicted))
+        print('total false posisive: '+str(len(infected_record)-true_predicted))
         print('precision: '+str( precision ))
         print('recall: '+str(recall))
-        print('F1_score: '+str(F1))
-        print('+++++++++++++++++++++++++++++++++++++++++++++')
-        if next_time_step > total_time_duration:
-            break
-        initial_features, initial_dataset = construct_features(users, initial_dataset, start_index, len(users), next_time_step, current_features = initial_features)
-        initial_dataset=network_simulation_merge_friends_list(initial_dataset, friend_list_path)
-        initial_dataset=network_simulation_merge_followers_list(initial_dataset, follower_list_path)
-        model = incremental_trained_model(start_index, users, initial_features, model)
-        current_time = next_time_step
+        print('F1: '+str(F1))
+        
     print(f"Simulation finished after {round((time.time() - start_time)/60,2)} minutes")
 
     accuracy_df = pd.DataFrame(accuracy)
